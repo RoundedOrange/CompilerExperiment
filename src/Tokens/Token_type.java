@@ -1,3 +1,5 @@
+package Tokens;
+
 /*词法分析部分*/
 public enum Token_type
 {
@@ -17,6 +19,7 @@ public enum Token_type
     Token_if,                       // if
     Token_else,                     // else
     Token_while,                    // while
+    Token_do,                       // do
     Token_for,                      // for
     Token_break,                    // break
     Token_continue,                 // continue

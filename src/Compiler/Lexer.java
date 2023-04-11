@@ -1,3 +1,8 @@
+package Compiler;
+
+import Tokens.Token;
+import Tokens.Token_type;
+
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
@@ -9,8 +14,8 @@ public class Lexer
     private static int pos = 0;// 字符流指针
     private static int line = 1;
     private static int column = 0;
-    public static String input; // 待分析的输入字符流
-    public static Vector<Token> token_list = new Vector<>(); // token流，词法分析结果存放于此变量
+    private static String input; // 待分析的输入字符流
+    private static Vector<Token> token_list = new Vector<>(); // token流，词法分析结果存放于此变量
     // 私有化构造函数，防止实例化
     private Lexer(){}
     //对输入进行词法分析
@@ -218,6 +223,8 @@ public class Lexer
                     return new Token(Token_type.Token_else,identifier_string.toString(),line,column);
                 if(identifier_string.toString().equals("while"))
                     return new Token(Token_type.Token_while,identifier_string.toString(),line,column);
+                if(identifier_string.toString().equals("do"))
+                    return new Token(Token_type.Token_do,identifier_string.toString(),line,column);
                 if(identifier_string.toString().equals("for"))
                     return new Token(Token_type.Token_for,identifier_string.toString(),line,column);
                 if(identifier_string.toString().equals("break"))
@@ -373,5 +380,13 @@ public class Lexer
         }
         while(current_token.type != Token_type.Token_eof);
         return token_list;
+    }
+    public static String get_input()
+    {
+        return input;
+    }
+    public static Vector<Token> get_token_list()
+    {
+        return  token_list;
     }
 }
