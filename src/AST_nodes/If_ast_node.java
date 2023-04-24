@@ -1,5 +1,7 @@
 package AST_nodes;
 
+import Visitors.Visitor;
+
 public class If_ast_node extends AST_node
 {
     public AST_node condition;
@@ -10,5 +12,10 @@ public class If_ast_node extends AST_node
         this.condition = condition;
         this.then_statement = then_statement;
         this.else_statement = else_statement;
+    }
+
+    @Override
+    public void accept(Visitor v) {
+        v.visit(this);
     }
 }

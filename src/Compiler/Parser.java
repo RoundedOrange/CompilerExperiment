@@ -11,7 +11,7 @@ public class Parser
     private static Token current_token;
     private static Vector<Token> token_list;
     private static int pos =0;//Token流指针
-    private static AST_node entry_node = null;
+    private static Program_ast_node entry_node = null;
     //防止实例化
     private Parser(){}
     private static void eat_current_token()
@@ -237,7 +237,7 @@ public class Parser
             if(current_token.type == Token_type.Token_left_bracket)
             {
                 eat_current_token();//吃"["
-                node.size = Integer.getInteger(current_token.lexeme);
+                node.size = Integer.parseInt(current_token.lexeme);
                 node.type = Node_type.Node_array;
                 eat_current_token();//吃size
                 eat_current_token();//吃"]"
@@ -521,7 +521,7 @@ public class Parser
     }
 
     // program  :=  (variable_declaration | function_declaration)*
-    private static AST_node program()
+    private static Program_ast_node program()
     {
         Vector<VariableDeclaration_ast_node> variableDeclaration_list = new Vector<>();
         Vector<FunctionDeclaration_ast_node> functionDeclaration_list = new Vector<>();
@@ -597,7 +597,7 @@ public class Parser
         current_token = token_list.get(pos++);
         entry_node = program();
     }
-    public static AST_node get_entry_node()
+    public static Program_ast_node get_entry_node()
     {
         return entry_node;
     }

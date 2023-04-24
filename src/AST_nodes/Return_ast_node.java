@@ -1,5 +1,7 @@
 package AST_nodes;
 
+import Visitors.Visitor;
+
 public class Return_ast_node extends AST_node
 {
     public AST_node expression; //返回值表达式
@@ -7,5 +9,10 @@ public class Return_ast_node extends AST_node
     public Return_ast_node(AST_node expression)
     {
         this.expression = expression;
+    }
+
+    @Override
+    public void accept(Visitor v) {
+        v.visit(this);
     }
 }

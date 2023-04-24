@@ -1,5 +1,7 @@
 package AST_nodes;
 
+import Visitors.Visitor;
+
 public class Assignment_ast_node extends AST_node
 {
     public AST_node left;
@@ -10,5 +12,10 @@ public class Assignment_ast_node extends AST_node
         this.left = left;
         this.operation = operation;
         this.right = right;
+    }
+
+    @Override
+    public void accept(Visitor v) {
+        v.visit(this);
     }
 }

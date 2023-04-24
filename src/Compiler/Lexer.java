@@ -381,10 +381,7 @@ public class Lexer
         while(current_token.type != Token_type.Token_eof);
         return token_list;
     }
-    public static String get_input()
-    {
-        return input;
-    }
+
     public static Vector<Token> get_token_list()
     {
         return  token_list;

@@ -1,6 +1,7 @@
 package AST_nodes;
 
 import Tokens.*;
+import Visitors.Visitor;
 
 public class UnaryOperator_ast_node extends AST_node
 {
@@ -10,5 +11,10 @@ public class UnaryOperator_ast_node extends AST_node
     {
         this.op = op;
         this.right = right;
+    }
+
+    @Override
+    public void accept(Visitor v) {
+        v.visit(this);
     }
 }
