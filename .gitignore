@@ -27,3 +27,5 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+/bubble_sort.s
+/bubble_sort.exe

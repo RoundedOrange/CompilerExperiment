@@ -5,7 +5,6 @@ import Symbols.Function_symbol;
 import Symbols.Scoped_symbol_table;
 import Symbols.Symbol;
 import Symbols.Variable_symbol;
-import Tokens.Token_type;
 import Visitors.Visitor;
 
 import java.util.TreeMap;
@@ -35,15 +34,7 @@ public class Analyzer
         @Override
         public void visit(NumLiteral_ast_node node)
         {
-            if(node.token.type == Token_type.Token_int_literal)
-                node.baseType = Node_type.Node_int;
-            else if (node.token.type == Token_type.Token_float_literal)
-                node.baseType = Node_type.Node_float;
-            else if (node.token.type == Token_type.Token_bool_literal)
-                node.baseType = Node_type.Node_bool;
-            else if (node.token.type == Token_type.Token_char_literal)
-                node.baseType = Node_type.Node_char;
-            node.type = node.baseType;
+            node.baseType = node.type;
         }
 
         @Override
@@ -103,18 +94,12 @@ public class Analyzer
         {
             node.left.accept(this);
             node.right.accept(this);
-            if(node.operator == Token_type.Token_less_than || node.operator == Token_type.Token_less_equal || node.operator == Token_type.Token_greater_than || node.operator == Token_type.Token_greater_equal || node.operator == Token_type.Token_and || node.operator == Token_type.Token_or || node.operator == Token_type.Token_equal || node.operator == Token_type.Token_not_equal)
-            {
-                node.type = node.baseType = Node_type.Node_bool;
-            }
-            else
-            {
-                // 检查运算数是否兼容.
-                Node_type left_type = node.left.baseType;
-                Node_type right_type = node.right.baseType;
-                // 若兼容，取大，即bool < char < int < float
-                node.baseType = (left_type.compareTo(right_type) > 0) ? left_type : right_type;
-            }
+            // 检查运算数是否兼容.
+            Node_type left_type = node.left.baseType;
+            Node_type right_type = node.right.baseType;
+            // 若兼容，取大，即bool < char < int < float
+            node.baseType = (left_type.compareTo(right_type) > 0) ? left_type : right_type;
+
         }
 
         @Override
@@ -171,13 +156,7 @@ public class Analyzer
         public void visit(If_ast_node node)
         {
             if(node.condition != null)
-            {
                 node.condition.accept(this);
-                if(node.condition.baseType != Node_type.Node_bool)
-                    print_err("Condition in if should be a bool value!");
-            }
-            else
-                print_err("if statement has a null condition!");
             if(node.then_statement != null)
                 node.then_statement.accept(this);
             if(node.else_statement != null)
@@ -188,16 +167,9 @@ public class Analyzer
         public void visit(While_ast_node node)
         {
             if(node.condition != null)
-            {
                 node.condition.accept(this);
-                if(node.condition.baseType != Node_type.Node_bool)
-                    print_err("Condition in while should be a bool value!");
-                else
-                    print_err("while statement has a null condition!");
-                if(node.statement != null)
-                    node.statement.accept(this);
-            }
-
+            if(node.statement != null)
+                node.statement.accept(this);
         }
 
         @Override
@@ -219,13 +191,8 @@ public class Analyzer
         public void visit(For_ast_node node)
         {
             if(node.initialization != null)
-            {
-                node.condition.accept(this);
-                if(node.condition.baseType != Node_type.Node_bool)
-                    print_err("Condition in for should be a bool value!");
-            }
-            else
-                print_err("for statement has a null condition!");
+                node.initialization.accept(this);
+            node.condition.accept(this);
             if(node.increment != null)
                 node.increment.accept(this);
             node.statement.accept(this);
@@ -267,7 +234,7 @@ public class Analyzer
                     variable_symbol = new Variable_symbol(variable_ast_node.variable_name, variable_ast_node.type,variable_ast_node.baseType,0,current_scope.level);
                     for(var element: node.inits)
                     {
-                        String init_value_literal = ((NumLiteral_ast_node)((Assignment_ast_node)element).right).token.lexeme;
+                        String init_value_literal = ((NumLiteral_ast_node)((Assignment_ast_node)element).right).literal;
                         variable_ast_node.elements.add(init_value_literal);
                     }
                     globals.add(variable_ast_node);

@@ -1,14 +1,13 @@
 package Compiler;
-
 import AST_nodes.*;
 import Visitors.Visitor;
-import java.util.Objects;
-
+import java.util.Map;
+import java.util.TreeMap;
 import static Compiler.Analyzer.Semantic_analyzer.globals;
-
 public class Generator
 {
     private Generator(){}
+    private static final TreeMap<String,String> print_format_strings = new TreeMap<>();
     public static void generate(AST_node entrance)
     {
         X86_conde_generator generator = new X86_conde_generator();
@@ -24,11 +23,11 @@ public class Generator
 
         private static int align_to(int n)
         {
-            return (n + 16 - 1) / 16 * 16;
+            return ((n + 16 - 1) / 16) * 16;
         }
         private static void compare_zero(AST_node condition)
         {
-            if(condition.type != Node_type.Node_float)
+            if(condition.baseType != Node_type.Node_float)
                 System.out.println("    cmp $0, %rax");
             else
             {
@@ -39,19 +38,10 @@ public class Generator
         }
         public void generate_variable_address(Variable_ast_node variable_ast_node)
         {
+            int variable_offset = variable_ast_node.symbol.offset;
             /* 1. 全局变量 */
-            if(variable_ast_node.symbol != null && variable_ast_node.symbol.scope_level == 0)
-            {
-                if(variable_ast_node.type == Node_type.Node_array)
-                {
-                    // 全局数组变量，位于.data段.
-                    variable_ast_node.index_expression.accept(this);
-                    System.out.println("    mov %rax, %rcx");// 数组元素index
-                    System.out.println("    lea "+variable_ast_node.variable_name+"(%rip), %rax");// 数组起始地址
-                }
-                else// 全局非结构化变量，位于.data段.
-                    System.out.println("    lea "+variable_ast_node.variable_name+"(%rip), %rax");
-            }
+            if(variable_offset==0)// offset=0，则是全局变量，位于.data段
+                System.out.println("    lea "+variable_ast_node.variable_name+"(%rip), %rax");
             /* 2. 局部变量 */
             else if(variable_ast_node.type ==Node_type.Node_array)
             {
@@ -59,35 +49,35 @@ public class Generator
                 variable_ast_node.index_expression.accept(this);
                 System.out.println("    imul $8, %rax");
                 System.out.println("    push %rax");
-                System.out.println("    lea "+variable_ast_node.symbol.offset+"(%rbp), %rax");
+                System.out.println("    lea "+variable_offset+"(%rbp), %rax");
                 System.out.println("    pop %rdi");
                 System.out.println("    add %rdi, %rax");
             }
-            else if(variable_ast_node.symbol!= null)// 若不是数组
-                System.out.println("    lea "+variable_ast_node.symbol.offset+"(%rbp), %rax");
+            else// 若不是数组
+                System.out.println("    lea "+variable_offset+"(%rbp), %rax");
         }
         @Override
         public void visit(NumLiteral_ast_node node)
         {
             if(node.baseType == Node_type.Node_int)
-                System.out.println("    mov $"+node.token.lexeme+", %rax\n");
+                System.out.println("    mov $"+node.literal+", %rax\n");
             else if(node.baseType ==Node_type.Node_float)
             {
-                float f64 = Float.parseFloat(node.token.lexeme);
+                float f64 = Float.parseFloat(node.literal);
                 System.out.println("    mov $"+", %rax   # float "+f64);
                 System.out.println("    movq %rax, %xmm0\n");
             }
             else if(node.baseType == Node_type.Node_bool)
             {
                 // 类似c语言，true用整数1表示，false用整数0表示.
-                if(Objects.equals(node.token.lexeme, "1"))
+                if(node.literal.equals("true"))
                     System.out.println("    mov $1, %rax");
                 else
                     System.out.println("    mov $0, %rax");
             }
             else if(node.baseType == Node_type.Node_char)
             {
-                char c = node.token.lexeme.charAt(0);
+                char c = node.literal.charAt(0);
                 System.out.println("    mov $"+(int)c+", %rax   # char ");
             }
         }
@@ -96,54 +86,22 @@ public class Generator
         public void visit(Assignment_ast_node node)
         {
             // 赋值语句的左值是地址.
-            Variable_ast_node left_node = (Variable_ast_node) node.left;
-            /* 1. 全局变量 */
-            if(left_node.symbol != null && left_node.symbol.scope_level==0)
+            // 获取该地址，放入%rax，并由%rax入栈.
+            generate_variable_address((Variable_ast_node) node.left);
+            System.out.println("    push %rax");
+            // 赋值语句的右值是数值.
+            node.right.accept(this);
+            System.out.println("    pop %rdi");
+            // 若right-side是int类型的结果，则位于%rax; 若是float类型，则位于%xxm0.
+            if(node.baseType==Node_type.Node_float)
             {
-                // 获取该地址，因是全局变量.
-                generate_variable_address(left_node);
-                System.out.println("    push %rax");
-                System.out.println("    push %rcx");
-                // 赋值语句的右值是数值.
-                node.right.accept(this);
-                System.out.println("    pop %rcx");
-                System.out.println("    pop %rdi");
-                // 若right-side是int类型的结果，则位于%rax; 若是float类型，则位于%xxm0.
-                if(node.baseType ==Node_type.Node_float)
-                {
-                    // float类型的结果.
-                    if(node.right.baseType==Node_type.Node_float || node.right.baseType==Node_type.Node_int)// 若%rax参与float类型的运算，
-                    {
-                        System.out.println("    cvtsi2sd %rax, %xmm0");// 则需将之转换成float类型，并放入%xmm0.
-                    }
-                    System.out.println("    movsd %xmm0, (%rdi, %rcx, 8)");
-                }
-                else
-                    System.out.println("    mov %rax, (%rdi, %rcx, 8)");// int or bool, 即int类型的结果.
+                // float类型的结果.
+                if(node.right.baseType==Node_type.Node_float || node.right.baseType==Node_type.Node_int)// 若%rax参与float类型的运算，
+                    System.out.println("    cvtsi2sd %rax, %xmm0");// 则需将之转换成float类型，并放入%xmm0.
+                System.out.println("    movsd %xmm0, (%rdi)");
             }
-            /* 2. 局部变量 */
             else
-            {
-                // 获取该地址，因是局部变量，该地址被放入%rax.
-                generate_variable_address(left_node);
-                // 由%rax入栈.
-                System.out.println("    push %rax");
-                // 赋值语句的右值是数值.
-                node.right.accept(this);
-                System.out.println("    pop %rdi");
-                // 若right-side是int类型的结果，则位于%rax; 若是float类型，则位于%xxm0.
-                if(node.baseType ==Node_type.Node_float)
-                {
-                    // float类型的结果.
-                    if(node.right.baseType==Node_type.Node_float || node.right.baseType==Node_type.Node_int)// 若%rax参与float类型的运算，
-                    {
-                        System.out.println("    cvtsi2sd %rax, %xmm0");// 则需将之转换成float类型，并放入%xmm0.
-                    }
-                    System.out.println("    movsd %xmm0, (%rdi)");
-                }
-                else
-                    System.out.println("    mov %rax, (%rdi)");// int or bool, 即int类型的结果.
-            }
+                System.out.println("    mov %rax, (%rdi)");// int or bool, 即int类型的结果.
         }
 
         @Override
@@ -188,42 +146,33 @@ public class Generator
                     case Token_divide -> System.out.println("    divsd %xmm1, %xmm0");
                     case Token_equal,Token_not_equal,Token_less_than,Token_less_equal,Token_greater_than,Token_greater_equal ->
                     {
-                        System.out.println("    mov $0, %rax");
                         System.out.println("    ucomisd %xmm0, %xmm1");
                         switch(node.operator)
                         {
                             case Token_equal ->
                             {
-                                System.out.println("    movq $1, %rcx");
-                                System.out.println("    cmove %rcx, %rax");
+                                System.out.println("    sete %al");
+                                System.out.println("    setnp %dl");
+                                System.out.println("    and %dl, %al");
                             }
                             case Token_not_equal ->
                             {
-                                System.out.println("    movq $1, %rcx");
-                                System.out.println("    cmovne %rcx, %rax");
+                                System.out.println("    setne %al");
+                                System.out.println("    setp %dl");
+                                System.out.println("    or %dl, %al");
                             }
-                            case Token_less_than ->
-                            {
-                                System.out.println("    movq $1, %rcx");
-                                System.out.println("    cmova %rcx, %rax");
-                            }
-                            case Token_less_equal ->
-                            {
-                                System.out.println("    movq $1, %rcx");
-                                System.out.println("    cmovae %rcx, %rax");
-                            }
-                            case Token_greater_than ->
-                            {
-                                System.out.println("    movq $1, %rcx");
-                                System.out.println("    cmovb %rcx, %rax");
-                            }
-                            case Token_greater_equal ->
-                            {
-                                System.out.println("    movq $1, %rcx");
-                                System.out.println("    cmovbe %rcx, %rax");
-                            }
+                            case Token_less_than -> System.out.println("    setb %al");
+                            case Token_less_equal -> System.out.println("    setbe %al");
+                            case Token_greater_than -> System.out.println("    seta %al");
+                            case Token_greater_equal -> System.out.println("    setae %al");
                         }
+                        System.out.println("    and $1, %al");
+                        System.out.println("    movzb %al, %rax");
+                        return;
                     }
+                    default -> {
+                    return;
+                }
                 }
             }
             /* 2. 非float类型 */
@@ -270,11 +219,12 @@ public class Generator
                         System.out.println("    neg %rax");
                     else
                     {
-                        // 下面的三步将一个float取负数，即实现 %xmm0 = 0 - %xmm0.
-                        // 是有点啰嗦. chibicc有另一个解决方案，但是需要四步，同样啰嗦 :)
-                        System.out.println("    movsd %xmm0, %xmm1");
-                        System.out.println("    xorpd %xmm0, %xmm0");
-                        System.out.println("    subsd %xmm1, %xmm0");
+                        // 下面的四步将一个float取负数，即实现 %xmm0 = (-1) * %xmm0.
+                        // 是有点啰嗦. chibicc有另一个解决方案，但是也需要四步，同样啰嗦 :)
+                        System.out.println("    mov $1, %rax");
+                        System.out.println("    neg %rax");
+                        System.out.println("    cvtsi2sd %rax, %xmm1");
+                        System.out.println("    mulsd %xmm1, %xmm0");
                     }
                 }
                 case Token_not ->
@@ -316,35 +266,18 @@ public class Generator
         public void visit(Variable_ast_node node)
         {
             /* 变量是右值 */
-            // 1.首先，获取其在内存中的地址
-            generate_variable_address(node);
+            // 1.首先，获取其在内存中的地址，存于%rax：
+            int variable_offset = node.symbol.offset;
+            // 情况1：若offset=0，则是全局变量，位于.data段
+            if(variable_offset==0)
+                System.out.println("    lea "+node.variable_name+"(%rip), %rax");
+            else// 情况2：局部变量或参数，位于栈
+                generate_variable_address(node);
             // 2.然后，将其值由内存放入寄存器.
-                // 2.1 全局变量
-            if(node.symbol.scope_level ==0)
-            {
-                if(node.type == Node_type.Node_array)
-                {
-                    if(node.baseType ==Node_type.Node_float) // 若是float，
-                        System.out.println("    movsd (%rax,%rcx,8), %xmm0");// 其值放入%xmm0.
-                    else
-                        System.out.println("    mov (%rax,%rcx,8), %rax");// 其值放入%rax.
-                }
-                else
-                {
-                    if(node.baseType==Node_type.Node_float)// 若是float，
-                        System.out.println("    movsd (%rax), %xmm0");// 其值放入%xmm0.
-                    else
-                        System.out.println("    mov (%rax), %rax");// 其值放入%rax.
-                }
-            }
-            else
-            {
-                // 2.2 局部变量
-                if(node.baseType==Node_type.Node_float)// 若是float，
-                    System.out.println("    movsd (%rax), %xmm0");// 其值放入%xmm0.
-                else// 否则，
-                    System.out.println("    mov (%rax), %rax");// 其值放入%rax.
-            }
+            if(node.baseType==Node_type.Node_float) // 若是float，
+                System.out.println("    movsd (%rax), %xmm0");  // 其值放入%xmm0.
+            else if(node.baseType==Node_type.Node_int|| node.baseType==Node_type.Node_bool||node.baseType==Node_type.Node_char||node.baseType==Node_type.Node_array)// 否则，
+                System.out.println("    mov (%rax), %rax");// 其值放入%rax.
         }
 
         @Override
@@ -454,14 +387,20 @@ public class Generator
             node.value.accept(this);
             switch(node.value.baseType)
             {
-                case Node_float -> System.out.println("    lea printf_format_float(%rip), %rdi");
+                case Node_float ->
+                {
+                    print_format_strings.put("printf_format_float","    .string   \"%f\\n\"");
+                    System.out.println("    lea printf_format_float(%rip), %rdi");
+                }
                 case Node_int ->
                 {
+                    print_format_strings.put("printf_format_int","    .string   \"%d\\n\"");
                     System.out.println("    lea printf_format_int(%rip), %rdi");
                     System.out.println("    mov %rax, %rsi");
                 }
                 case Node_char ->
                 {
+                    print_format_strings.put("printf_format_char","    .string   \"%c\\n\"");
                     System.out.println("    lea printf_format_char(%rip), %rdi");
                     System.out.println("    mov %rax, %rsi");
                 }
@@ -582,6 +521,11 @@ public class Generator
                         System.out.println("    .double "+e);
                 else// if (g_var.type == Ty_int)
                         System.out.println("    .quad "+e);
+            }
+            for(Map.Entry<String ,String> f :print_format_strings.entrySet())
+            {
+                System.out.println(f.getKey()+":");
+                System.out.println(f.getValue());
             }
         }
 
